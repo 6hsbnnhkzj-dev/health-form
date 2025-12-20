@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>嘉里集團健康室建管系統</title>
-    <!-- 核心開發庫：使用穩定生產版本 -->
+    <title>嘉里集團健康室建管系統 - 完整全功能版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Lucide 圖標數據庫 -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
@@ -23,7 +21,7 @@
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #fed7aa; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #fdba74; }
+        .kerry-gradient { background: linear-gradient(135deg, #F37021 0%, #ff8c42 100%); }
         
         @media print {
             .print\:hidden { display: none !important; }
@@ -31,68 +29,23 @@
             #newsletter-content { border: none !important; box-shadow: none !important; border-radius: 0 !important; width: 100% !important; }
             .bg-orange-50 { background-color: #fff7ed !important; -webkit-print-color-adjust: exact; }
             .bg-slate-900 { background-color: #0f172a !important; -webkit-print-color-adjust: exact; color: white !important; }
-            .bg-orange-50\/20, .bg-orange-50\/30 { background-color: #fff7ed !important; -webkit-print-color-adjust: exact; }
-            .text-[#F37021] { color: #F37021 !important; -webkit-print-color-adjust: exact; }
-        }
-
-        .kerry-gradient {
-            background: linear-gradient(135deg, #F37021 0%, #ff8c42 100%);
+            .kerry-gradient { background: #F37021 !important; -webkit-print-color-adjust: exact; }
         }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <!-- Firebase SDK 模組載入 -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-
-        // 全局掛載 SDK 方法以供 React 腳本呼叫
-        window.FB_SDK = { 
-            initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
-            getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, query, serverTimestamp 
-        };
-    </script>
-
-    <!-- React 應用程式邏輯 -->
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        const KERRY_ORANGE = '#F37021';
-        
-        // 統一 appId：所有資料路徑都依賴此值
-        const getAppId = () => window.__app_id || 'ohn-project-2026';
-
-        /**
-         * 穩定圖標組件：直接解析 lucide 圖標數據為 SVG
-         */
+        // --- 小工具：圖標渲染 ---
         const Icon = ({ name, size = 20, className = "" }) => {
-            // 安全檢查：如果 lucide 未載入或圖示資料格式不正確，回退為空白佔位
             const iconData = (window.lucide && window.lucide.icons && window.lucide.icons[name]) ? window.lucide.icons[name] : null;
-            if (!iconData || !Array.isArray(iconData)) return <span style={{ width: size, height: size }} className={`inline-block ${className}`} />;
-
+            if (!iconData) return <span style={{ width: size, height: size }} className={`inline-block ${className}`} />;
             return (
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width={size}
-                    height={size}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={className}
-                >
-                    {iconData.map((item, index) => {
-                        // lucide icon entry 格式通常為 [tagName, {attr: value, ...}]
-                        const tag = Array.isArray(item) ? item[0] : null;
-                        const attrs = Array.isArray(item) ? (item[1] || {}) : {};
-                        if (!tag) return null;
-                        return React.createElement(tag, { key: index, ...attrs });
-                    })}
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {iconData.map((item, index) => React.createElement(item[0], { key: index, ...item[1] }))}
                 </svg>
             );
         };
@@ -110,711 +63,411 @@
         };
 
         function App() {
-            const [user, setUser] = useState(null);
-            const [isAuthReady, setIsAuthReady] = useState(false);
+            // --- 資料狀態 (由 LocalStorage 驅動) ---
+            const [projects, setProjects] = useState(() => JSON.parse(localStorage.getItem('kj_projects') || '[]'));
+            const [tasks, setTasks] = useState(() => JSON.parse(localStorage.getItem('kj_tasks') || '[]'));
+            const [members, setMembers] = useState(() => JSON.parse(localStorage.getItem('kj_members') || '[{"id":"m1","name":"羽瑩"},{"id":"m2","name":"嘉莉"}]'));
+            const [routines, setRoutines] = useState(() => JSON.parse(localStorage.getItem('kj_routines') || '[{"id":"r1","title":"醫藥箱盤點","frequency":"每月","assignee":"羽瑩"}]'));
+            
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [projects, setProjects] = useState([]);
-            const [tasks, setTasks] = useState([]);
-            const [members, setMembers] = useState([]);
-            const [routines, setRoutines] = useState([]);
-            const [isLoading, setIsLoading] = useState(true);
             const [message, setMessage] = useState({ show: false, text: '', type: 'info' });
 
-            // UI 狀態
+            // UI 控制
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isEditModalOpen, setIsEditModalOpen] = useState(false);
             const [showImportModal, setShowImportModal] = useState(false);
-            const [isDemoMode, setIsDemoMode] = useState(false);
             const [importText, setImportText] = useState('');
+
+            // 表單暫存
+            const [projectForm, setProjectForm] = useState({ id: '', title: '', leader: '', description: '', startDate: '', endDate: '' });
+            const [newTask, setNewTask] = useState({ projectId: '', title: '', assignee: '', startDate: '', endDate: '' });
+            const [newRoutine, setNewRoutine] = useState({ title: '', frequency: '每月', assignee: '' });
             const [newMemberName, setNewMemberName] = useState('');
-            
-            const [projectForm, setProjectForm] = useState({ 
-                id: '', title: '', leader: '', description: '', 
-                startDate: new Date().toISOString().split('T')[0], 
-                endDate: new Date().toISOString().split('T')[0] 
-            });
-            
-            const [newTask, setNewTask] = useState({ 
-                projectId: '', title: '', assignee: '', 
-                date: new Date().toISOString().split('T')[0], 
-                status: 'pending' 
-            });
 
-            const [newRoutine, setNewRoutine] = useState({ 
-                title: '', frequency: '每週', assignee: '', 
-                startDate: new Date().toISOString().split('T')[0], 
-                endDate: new Date().toISOString().split('T')[0] 
-            });
+            // --- 自動儲存機制 ---
+            useEffect(() => {
+                localStorage.setItem('kj_projects', JSON.stringify(projects));
+                localStorage.setItem('kj_tasks', JSON.stringify(tasks));
+                localStorage.setItem('kj_members', JSON.stringify(members));
+                localStorage.setItem('kj_routines', JSON.stringify(routines));
+            }, [projects, tasks, members, routines]);
 
-            const showMessage = (text, type = 'info') => {
+            const showMsg = (text, type = 'info') => {
                 setMessage({ show: true, text, type });
                 setTimeout(() => setMessage({ show: false, text: '', type: 'info' }), 3000);
             };
 
-            // 1. 初始化 Firebase 驗證流程 (確保在所有動作前完成登入)
-            useEffect(() => {
-                let interval;
-                let attempts = 0;
-                const MAX_ATTEMPTS = 25; // 25 * 200ms = 5s
+            // --- 報表數據計算 ---
+            const memberNames = members.map(m => m.name);
+            const stats = useMemo(() => projects.map(p => {
+                const pt = tasks.filter(t => t.projectId === p.id);
+                const done = pt.filter(t => t.status === 'completed').length;
+                return { ...p, percent: pt.length > 0 ? Math.round((done / pt.length) * 100) : 0, total: pt.length, done };
+            }), [projects, tasks]);
 
-                const runAuth = async () => {
-                    interval = setInterval(async () => {
-                        attempts++;
-                        // 當 FB_SDK 與 firebase config 都就緒時，正常初始化
-                        if (window.FB_SDK && window.__firebase_config) {
-                            clearInterval(interval);
-                            const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } = window.FB_SDK;
-                            try {
-                                const firebaseConfig = JSON.parse(window.__firebase_config);
-                                const app = initializeApp(firebaseConfig);
-                                const auth = getAuth(app);
-                                if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-                                    await signInWithCustomToken(auth, window.__initial_auth_token);
-                                } else {
-                                    await signInAnonymously(auth);
-                                }
-                                onAuthStateChanged(auth, (u) => {
-                                    if (u) {
-                                        setUser(u);
-                                        setIsAuthReady(true);
-                                    }
-                                });
-                            } catch (e) {
-                                console.error("Firebase 初始化失敗:", e);
-                            }
-                            return;
-                        }
-
-                        // 超時回退：若超過嘗試次數仍無 Firebase 設定，啟用示範模式（不會連線 Firestore）
-                        if (attempts >= MAX_ATTEMPTS) {
-                            clearInterval(interval);
-                            console.warn('Firebase 未設定，已啟用示範模式 (demo mode)');
-                            window.__demo_mode = true;
-                            setIsDemoMode(true);
-                            setUser({ uid: 'demo' });
-                            setIsAuthReady(true);
-                            setIsLoading(false);
-                            showMessage('示範模式：未連接 Firebase，部分功能僅為展示', 'info');
-                        }
-                    }, 200);
-                };
-                runAuth();
-                return () => clearInterval(interval);
-            }, []);
-
-            // 2. 資料讀取閘門 (只有驗證成功且非示範模式才開啟監聽)
-            useEffect(() => {
-                if (!isAuthReady || !user || !window.FB_SDK || isDemoMode) return;
-
-                const { getFirestore, collection, onSnapshot } = window.FB_SDK;
-                const db = getFirestore();
-                const appId = getAppId();
-
-                // 嚴格路徑規範工具
-                const createRef = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
-
-                const unsubP = onSnapshot(createRef('projects'), s => setProjects(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error("專案監聽失敗", e));
-                const unsubT = onSnapshot(createRef('tasks'), s => setTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error("任務監聽失敗", e));
-                const unsubR = onSnapshot(createRef('routines'), s => setRoutines(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error("常規監聽失敗", e));
-                const unsubM = onSnapshot(createRef('members'), s => {
-                    const mData = s.docs.map(d => ({id: d.id, ...d.data()}));
-                    const sorted = mData.sort((a,b) => (a.order || 0) - (b.order || 0));
-                    setMembers(sorted);
-                    // 初始化預設指派人選
-                    if (sorted.length > 0) {
-                        setProjectForm(f => ({...f, leader: f.leader || sorted[0].name}));
-                        setNewTask(t => ({...t, assignee: t.assignee || sorted[0].name}));
-                    }
-                }, e => console.error("成員監聽失敗", e));
-
-                setIsLoading(false);
-                return () => { unsubP(); unsubT(); unsubR(); unsubM(); };
-            }, [isAuthReady, user, isDemoMode]);
-
-            // 數據計算邏輯
-            const memberNames = useMemo(() => members.map(m => m.name), [members]);
-            const sortedTasks = useMemo(() => [...tasks].sort((a, b) => new Date(a.date) - new Date(b.date)), [tasks]);
-            const sortedRoutines = useMemo(() => [...routines].sort((a, b) => new Date(a.startDate || 0) - new Date(b.startDate || 0)), [routines]);
-            
-            const projectStats = useMemo(() => {
-                return projects.map(proj => {
-                    const pTasks = tasks.filter(t => t.projectId === proj.id);
-                    const total = pTasks.length;
-                    const completed = pTasks.filter(t => t.status === 'completed').length;
-                    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-                    return { ...proj, total, completed, percent };
-                }).sort((a, b) => b.percent - a.percent);
-            }, [projects, tasks]);
-
-            const newsletterData = useMemo(() => {
+            const newsletter = useMemo(() => {
                 const now = new Date();
-                const curYear = now.getFullYear();
-                const curMonth = now.getMonth();
-                const nextMonthDate = new Date(curYear, curMonth + 1, 1);
-                const isMatch = (dateStr, y, m) => {
-                    if (!dateStr) return false;
-                    const d = new Date(dateStr);
-                    return d.getFullYear() === y && d.getMonth() === m;
-                };
+                const curY = now.getFullYear(), curM = now.getMonth();
+                const nextY = curM === 11 ? curY + 1 : curY;
+                const nextM = curM === 11 ? 0 : curM + 1;
+                const isM = (d, y, m) => { if(!d) return false; const dt = new Date(d); return dt.getFullYear() === y && dt.getMonth() === m; };
+                
                 return {
-                    thisMonth: {
-                        tasks: sortedTasks.filter(t => isMatch(t.date, curYear, curMonth)),
-                        routines: sortedRoutines.filter(r => isMatch(r.startDate, curYear, curMonth) || isMatch(r.endDate, curYear, curMonth))
-                    },
-                    nextMonth: {
-                        tasks: sortedTasks.filter(t => isMatch(t.date, nextMonthDate.getFullYear(), nextMonthDate.getMonth())),
-                        routines: sortedRoutines.filter(r => isMatch(r.startDate, nextMonthDate.getFullYear(), nextMonthDate.getMonth()) || isMatch(r.endDate, nextMonthDate.getFullYear(), nextMonthDate.getMonth()))
-                    }
+                    thisMonth: tasks.filter(t => isM(t.endDate, curY, curM)).sort((a,b)=>new Date(a.endDate)-new Date(b.endDate)),
+                    nextMonth: tasks.filter(t => isM(t.endDate, nextY, nextM)).sort((a,b)=>new Date(a.endDate)-new Date(b.endDate))
                 };
-            }, [sortedTasks, sortedRoutines]);
+            }, [tasks]);
 
-            // Firebase 交互功能 (已補全缺失變數與函數)
-            const handleAddProject = async (e) => {
+            // --- 功能函式 ---
+            const handleAddProject = (e) => {
                 e.preventDefault();
-                const { getFirestore, collection, addDoc } = window.FB_SDK;
-                const appId = getAppId();
-                await addDoc(collection(getFirestore(), 'artifacts', appId, 'public', 'data', 'projects'), { ...projectForm, createdAt: Date.now() });
-                setProjectForm({ id:'', title:'', leader: memberNames[0] || '', description:'', startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0] });
+                setProjects([...projects, { ...projectForm, id: 'p' + Date.now() }]);
                 setIsModalOpen(false);
-                showMessage('大專案啟動成功', 'success');
+                setProjectForm({ id: '', title: '', leader: '', description: '', startDate: '', endDate: '' });
+                showMsg('大專案啟動成功', 'success');
             };
 
-            const handleUpdateProject = async (e) => {
+            const handleAddTask = (e, pid) => {
                 e.preventDefault();
-                const { getFirestore, doc, updateDoc } = window.FB_SDK;
-                const appId = getAppId();
-                const { id, ...data } = projectForm;
-                await updateDoc(doc(getFirestore(), 'artifacts', appId, 'public', 'data', 'projects', id), data);
-                setIsEditModalOpen(false);
-                showMessage('專案資訊已更新');
-            };
-
-            const handleAddTask = async (e) => {
-                e.preventDefault();
-                if (!newTask.title || !newTask.assignee) return;
-                const { getFirestore, collection, addDoc } = window.FB_SDK;
-                const appId = getAppId();
-                await addDoc(collection(getFirestore(), 'artifacts', appId, 'public', 'data', 'tasks'), { ...newTask, createdAt: Date.now() });
+                if (!newTask.title || !newTask.startDate || !newTask.endDate) return;
+                setTasks([...tasks, { ...newTask, id: 't' + Date.now(), projectId: pid, status: 'pending' }]);
                 setNewTask({ ...newTask, title: '' });
-                showMessage('任務已指派');
+                showMsg('任務指派成功');
             };
 
-            const handleAddRoutine = async (e) => {
+            const handleAddRoutine = (e) => {
                 e.preventDefault();
-                if (!newRoutine.title || !newRoutine.assignee) return;
-                const { getFirestore, collection, addDoc } = window.FB_SDK;
-                const appId = getAppId();
-                await addDoc(collection(getFirestore(), 'artifacts', appId, 'public', 'data', 'routines'), { ...newRoutine, createdAt: Date.now() });
-                setNewRoutine({ title: '', frequency: '每週', assignee: memberNames[0] || '', startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0] });
-                showMessage('常規工作已加入');
+                if (!newRoutine.title) return;
+                setRoutines([...routines, { ...newRoutine, id: 'r' + Date.now() }]);
+                setNewRoutine({ title: '', frequency: '每月', assignee: memberNames[0] });
+                showMsg('常規工作已新增');
             };
 
-            const toggleTaskStatus = async (task) => {
-                const { getFirestore, doc, updateDoc } = window.FB_SDK;
-                const appId = getAppId();
-                await updateDoc(doc(getFirestore(), 'artifacts', appId, 'public', 'data', 'tasks', task.id), {
-                    status: task.status === 'completed' ? 'pending' : 'completed'
+            const handleImportCSV = () => {
+                const lines = importText.split('\n').filter(l => l.trim());
+                const items = lines.map(line => {
+                    const [t, f, a] = line.split(',').map(s => s?.trim());
+                    return { id: 'r' + Math.random(), title: t, frequency: f || '每月', assignee: a || memberNames[0] };
                 });
-            };
-
-            const addMember = async () => {
-                if (!newMemberName.trim()) return;
-                const { getFirestore, collection, addDoc } = window.FB_SDK;
-                const appId = getAppId();
-                await addDoc(collection(getFirestore(), 'artifacts', appId, 'public', 'data', 'members'), {
-                    name: newMemberName.trim(), order: members.length, createdAt: Date.now()
-                });
-                setNewMemberName('');
-                showMessage('成員名單已更新');
-            };
-
-            const handleImportCSV = async () => {
-                const { getFirestore, collection, addDoc } = window.FB_SDK;
-                const appId = getAppId();
-                const lines = importText.split('\n');
-                const today = new Date().toISOString().split('T')[0];
-                let count = 0;
-                for (const line of lines) {
-                    if (!line.trim()) continue;
-                    const [title, freq, ass] = line.split(',').map(s => s?.trim());
-                    if (title && freq) {
-                        await addDoc(collection(getFirestore(), 'artifacts', appId, 'public', 'data', 'routines'), {
-                            title, frequency: freq, assignee: ass || memberNames[0], startDate: today, endDate: today, createdAt: Date.now()
-                        });
-                        count++;
-                    }
-                }
+                setRoutines([...routines, ...items]);
                 setImportText('');
                 setShowImportModal(false);
-                showMessage(`成功匯入 ${count} 筆`, 'success');
+                showMsg(`匯入 ${items.length} 筆成功`);
             };
-
-            const handleExportCSV = () => {
-                const header = "項目,頻率,開始日,迄日,負責人\n";
-                const rows = routines.map(r => `${r.title},${r.frequency},${r.startDate},${r.endDate},${r.assignee}`).join("\n");
-                const blob = new Blob(["\ufeff" + header + rows], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement("a");
-                link.href = URL.createObjectURL(blob);
-                link.download = `嘉里健康室常規清單_${new Date().toLocaleDateString()}.csv`;
-                link.click();
-            };
-
-            if (isLoading || !isAuthReady) return (
-                <div className="flex h-screen items-center justify-center bg-orange-50 text-center">
-                    <div className="flex flex-col items-center gap-6">
-                        <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-[#F37021]"></div>
-                        <p className="font-black text-[#F37021] text-xl animate-pulse tracking-widest uppercase italic leading-none">Initializing Health System...</p>
-                    </div>
-                </div>
-            );
 
             return (
-                <div className="flex min-h-screen bg-orange-50 relative overflow-x-hidden">
-                    {isDemoMode && (
-                        <div className="fixed top-6 right-6 z-[120] bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg shadow-md flex items-center gap-4">
-                            <div className="font-black">示範模式</div>
-                            <div className="text-sm">目前未連線 Firebase，資料為示範或讀取受限。</div>
-                            <button onClick={() => { setIsDemoMode(false); showMessage('已關閉示範提示'); }} className="ml-4 text-xs px-3 py-1 bg-yellow-200 rounded-full font-black">關閉</button>
-                        </div>
-                    )}
-                    {/* 通知組件 */}
+                <div className="flex min-h-screen relative">
+                    {/* 通知訊息 */}
                     {message.show && (
                         <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[100] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce ${message.type === 'success' ? 'bg-green-600 text-white' : 'bg-slate-800 text-white'}`}>
                             <Icon name={message.type === 'success' ? "CheckCircle2" : "AlertCircle"} size={24} />
-                            <span className="font-black text-lg">{message.text}</span>
+                            <span className="font-black">{message.text}</span>
                         </div>
                     )}
 
                     {/* 側邊導覽 */}
                     <aside className="print:hidden fixed h-full w-64 bg-white border-r border-orange-100 flex flex-col z-20 shadow-xl">
                         <div className="p-8 border-b border-orange-50 bg-white">
-                            <h1 className="text-xl font-black text-[#F37021] tracking-tighter leading-none">嘉里集團健康室</h1>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 italic tracking-widest leading-none">Kerry TJ Logistics</p>
+                            <h1 className="text-xl font-black text-[#F37021] tracking-tighter">嘉里集團健康室</h1>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 italic tracking-widest leading-none">Management System</p>
                         </div>
                         <nav className="flex-1 p-6 space-y-2 overflow-y-auto custom-scrollbar">
                             <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${activeTab === 'dashboard' ? 'kerry-gradient text-white shadow-xl shadow-orange-200' : 'text-slate-500 hover:bg-orange-50'}`}>
-                                <Icon name="LayoutDashboard" size={18} /> <span className="font-bold tracking-tight">首頁專案看板</span>
+                                <Icon name="LayoutDashboard" size={18} /> <span className="font-bold">專案看板</span>
                             </button>
-                            <button onClick={() => setActiveTab('weekly')} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${activeTab === 'weekly' ? 'bg-slate-800 text-white shadow-xl' : 'text-slate-500 hover:bg-orange-50'}`}>
-                                <Icon name="FileText" size={18} /> <span className="font-bold tracking-tight">工作電子報</span>
+                            <button onClick={() => setActiveTab('weekly')} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${activeTab === 'weekly' ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-500 hover:bg-orange-50'}`}>
+                                <Icon name="BarChart3" size={18} /> <span className="font-bold">報表電子報</span>
                             </button>
                             <button onClick={() => setActiveTab('routine')} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${activeTab === 'routine' ? 'bg-emerald-600 text-white shadow-xl' : 'text-slate-500 hover:bg-orange-50'}`}>
-                                <Icon name="Repeat" size={18} /> <span className="font-bold tracking-tight">常規事項管理</span>
+                                <Icon name="Repeat" size={18} /> <span className="font-bold">常規管理</span>
                             </button>
                             
-                            <div className="pt-8 border-t border-orange-50 mt-6 text-tighter">
-                                <p className="text-[10px] font-black text-slate-300 px-4 uppercase mb-4 italic tracking-widest leading-none">Team Members</p>
-                                {memberNames.length > 0 ? memberNames.map(name => (
-                                    <button key={name} onClick={() => setActiveTab(name)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mt-1 transition-all ${activeTab === name ? 'bg-orange-100 text-[#F37021] font-black' : 'text-slate-500 hover:bg-orange-50'}`}>
+                            <div className="pt-8 border-t border-orange-50 mt-6">
+                                <p className="text-[10px] font-black text-slate-300 px-4 uppercase mb-2 italic">護理師團隊</p>
+                                {memberNames.map(name => (
+                                    <button key={name} onClick={() => setActiveTab(name)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${activeTab === name ? 'bg-orange-100 text-[#F37021] font-black' : 'text-slate-500 hover:bg-orange-50'}`}>
                                         <div className={`w-1.5 h-1.5 rounded-full ${activeTab === name ? 'bg-[#F37021]' : 'bg-slate-300'}`}></div>
                                         {name}
                                     </button>
-                                )) : <p className="text-[10px] text-slate-300 italic px-4">請先至後台新增成員</p>}
+                                ))}
                             </div>
                         </nav>
-                        <div className="pt-8 mt-auto p-6 border-t border-orange-50">
+                        <div className="p-6 border-t border-orange-50">
                             <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${activeTab === 'settings' ? 'bg-slate-700 text-white shadow-xl' : 'text-slate-500 hover:bg-orange-50'}`}>
-                                <Icon name="Settings" size={18} /> <span className="font-bold">系統後台設定</span>
+                                <Icon name="Settings" size={18} /> <span className="font-bold">系統設定</span>
                             </button>
                         </div>
                     </aside>
 
                     {/* 主要內容區 */}
                     <main className="lg:ml-64 flex-1 p-4 md:p-10 min-h-screen">
+                        
+                        {/* 1. 專案看板頁面 */}
                         {activeTab === 'dashboard' && (
-                            <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-500 text-tighter leading-none">
+                            <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-500">
                                 <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
                                     <div>
-                                        <h2 className="text-4xl font-black text-slate-900 tracking-tighter leading-none">專案管理看板</h2>
-                                        <p className="text-[#F37021] font-bold mt-4 ml-1">2026 年度重點計畫起訖追蹤系統</p>
+                                        <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">專案管理看板</h2>
+                                        <p className="text-[#F37021] font-bold mt-2">任務精確分派 (起始/截止日)</p>
                                     </div>
-                                    <button onClick={() => setIsModalOpen(true)} className="bg-[#F37021] text-white px-10 py-5 rounded-3xl font-black shadow-2xl shadow-orange-200 flex items-center gap-3 hover:scale-105 active:scale-95 transition-all">
-                                        <Icon name="Plus" size={24} /> 建立大專案
+                                    <button onClick={() => setIsModalOpen(true)} className="bg-[#F37021] text-white px-10 py-5 rounded-3xl font-black shadow-2xl flex items-center gap-3 hover:scale-105 transition-all">
+                                        <Icon name="Plus" size={24} /> 啟動大專案
                                     </button>
                                 </header>
 
                                 <div className="grid md:grid-cols-2 gap-8">
-                                    {projects.map(proj => {
-                                        const stats = projectStats.find(s => s.id === proj.id);
-                                        return (
-                                            <div key={proj.id} className="bg-white rounded-[2.5rem] border border-orange-100 shadow-sm overflow-hidden flex flex-col group hover:border-[#F37021] transition-all duration-300">
-                                                <div className="p-8 border-b border-orange-50 relative">
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="flex-1 pr-10">
-                                                            <h3 className="text-2xl font-black text-slate-800 leading-tight tracking-tight">{proj.title}</h3>
-                                                            <div className="flex flex-wrap items-center gap-3 mt-4">
-                                                                <span className="bg-orange-50 text-[#F37021] text-[10px] px-3 py-1 rounded-full font-black uppercase border border-orange-100 italic leading-none">負責：{proj.leader}</span>
-                                                                <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg">
-                                                                    <Icon name="Calendar" size={12} /> {formatDate(proj.startDate)} — {formatDate(proj.endDate)}
-                                                                </span>
-                                                            </div>
+                                    {stats.map(proj => (
+                                        <div key={proj.id} className="bg-white rounded-[2.5rem] border border-orange-100 shadow-sm overflow-hidden flex flex-col hover:border-[#F37021] transition-all">
+                                            <div className="p-8 border-b border-orange-50 relative">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h3 className="text-2xl font-black text-slate-800 leading-tight">{proj.title}</h3>
+                                                        <div className="flex gap-3 mt-4">
+                                                            <span className="bg-orange-50 text-[#F37021] text-[10px] px-3 py-1 rounded-full font-black uppercase border border-orange-100">負責：{proj.leader}</span>
+                                                            <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Icon name="Calendar" size={12}/> {formatDate(proj.startDate)} — {formatDate(proj.endDate)}</span>
                                                         </div>
-                                                        <button onClick={() => { setProjectForm(proj); setIsEditModalOpen(true); }} className="p-2 hover:bg-orange-50 rounded-xl text-slate-300 hover:text-[#F37021] transition-all shrink-0">
-                                                            <Icon name="Edit2" size={20} />
-                                                        </button>
                                                     </div>
-                                                    <div className="mt-6 w-full bg-slate-100 h-2.5 rounded-full overflow-hidden shadow-inner border border-slate-50">
-                                                        <div className={`h-full transition-all duration-1000 ${stats?.percent === 100 ? 'bg-emerald-500' : 'bg-[#F37021]'}`} style={{ width: `${stats?.percent}%` }}></div>
-                                                    </div>
+                                                    <button onClick={()=>{setProjectForm(proj); setIsEditModalOpen(true);}} className="text-slate-300 hover:text-[#F37021]"><Icon name="Edit2" size={20}/></button>
                                                 </div>
-
-                                                <div className="p-8 bg-orange-50/20 flex-1 space-y-4">
-                                                    <form onSubmit={handleAddTask} className="space-y-3 p-5 bg-white rounded-2xl border border-orange-100 shadow-inner">
-                                                        <div className="flex gap-2">
-                                                            <input type="date" className="text-xs border border-orange-100 rounded-xl px-2 py-2 bg-slate-50 w-32 outline-none focus:ring-2 focus:ring-orange-200" value={newTask.projectId === proj.id ? newTask.date : ''} onChange={e => setNewTask({...newTask, date: e.target.value, projectId: proj.id})} />
-                                                            <select className="text-xs border border-orange-100 rounded-xl px-2 py-2 bg-slate-50 flex-1 outline-none font-bold focus:ring-2 focus:ring-orange-200" value={newTask.projectId === proj.id ? newTask.assignee : ''} onChange={e => setNewTask({...newTask, assignee: e.target.value, projectId: proj.id})}>
-                                                                <option value="">選擇執行人員</option>
-                                                                {memberNames.map(m => <option key={m} value={m}>{m}</option>)}
-                                                            </select>
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <input placeholder="輸入任務細項內容..." className="flex-1 text-xs border border-orange-100 rounded-xl px-4 py-2 bg-slate-50 outline-none focus:ring-2 focus:ring-orange-200" value={newTask.projectId === proj.id ? newTask.title : ''} onFocus={() => setNewTask({...newTask, projectId: proj.id})} onChange={e => setNewTask({...newTask, title: e.target.value})} />
-                                                            <button type="submit" className="bg-slate-800 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-1 shrink-0 hover:bg-black transition-all shadow-md leading-none">指派</button>
-                                                        </div>
-                                                    </form>
-
-                                                    <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
-                                                        {sortedTasks.filter(t => t.projectId === proj.id).map(t => (
-                                                            <div key={t.id} className="bg-white p-5 rounded-2xl border border-orange-50 flex items-center justify-between shadow-sm group/item hover:border-orange-200 transition-all">
-                                                                <div className="flex items-center gap-4 text-tighter leading-none">
-                                                                    <button onClick={() => toggleTaskStatus(t)} className={`transition-all ${t.status === 'completed' ? 'text-emerald-500' : 'text-slate-200 hover:text-[#F37021]'}`}>
-                                                                        <Icon name="CheckCircle2" size={26} />
-                                                                    </button>
-                                                                    <div>
-                                                                        <p className={`text-base font-black leading-none ${t.status === 'completed' ? 'line-through text-slate-300 font-normal opacity-60' : 'text-slate-800'}`}>{t.title}</p>
-                                                                        <p className="text-[10px] text-slate-400 font-black mt-2 uppercase tracking-tighter italic leading-none">{formatDate(t.date)} · 執行人：{t.assignee}</p>
-                                                                    </div>
-                                                                </div>
-                                                                <button onClick={() => { 
-                                                                    if(window.confirm('確定移除此任務？')) {
-                                                                        const { getFirestore, doc, deleteDoc } = window.FB_SDK;
-                                                                        const appId = getAppId();
-                                                                        deleteDoc(doc(getFirestore(), 'artifacts', appId, 'public', 'data', 'tasks', t.id)); 
-                                                                    }
-                                                                }} className="opacity-0 group-item-hover:opacity-100 p-2 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
-                                                                    <Icon name="Trash2" size={18} />
-                                                                </button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
+                                                <div className="mt-6 w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                                    <div className={`h-full transition-all duration-1000 ${proj.percent === 100 ? 'bg-emerald-500' : 'bg-[#F37021]'}`} style={{ width: `${proj.percent}%` }}></div>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
+
+                                            <div className="p-8 bg-orange-50/20 flex-1 space-y-4">
+                                                {/* 強化任務指派區 (起訖日) */}
+                                                <form onSubmit={(e) => handleAddTask(e, proj.id)} className="bg-white p-5 rounded-2xl border border-orange-100 shadow-sm space-y-3">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div><label className="text-[10px] font-black text-slate-400 ml-1">START 起始</label><input type="date" required className="w-full bg-slate-50 border border-orange-100 rounded-lg px-2 py-1.5 text-xs font-bold outline-none" value={newTask.projectId===proj.id?newTask.startDate:''} onChange={e=>setNewTask({...newTask, startDate:e.target.value, projectId:proj.id})} /></div>
+                                                        <div><label className="text-[10px] font-black text-slate-400 ml-1">END 截止</label><input type="date" required className="w-full bg-slate-50 border border-orange-100 rounded-lg px-2 py-1.5 text-xs font-bold outline-none" value={newTask.projectId===proj.id?newTask.endDate:''} onChange={e=>setNewTask({...newTask, endDate:e.target.value, projectId:proj.id})} /></div>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <select required className="bg-slate-50 border border-orange-100 rounded-lg px-2 py-1.5 text-xs flex-1 outline-none font-black" value={newTask.projectId===proj.id?newTask.assignee:''} onChange={e=>setNewTask({...newTask, assignee:e.target.value, projectId:proj.id})}>
+                                                            <option value="">指派人員</option>
+                                                            {memberNames.map(n=><option key={n} value={n}>{n}</option>)}
+                                                        </select>
+                                                        <input required placeholder="任務內容..." className="flex-[2] bg-slate-50 border border-orange-100 rounded-lg px-3 py-1.5 text-xs outline-none" value={newTask.projectId===proj.id?newTask.title:''} onFocus={()=>setNewTask({...newTask, projectId:proj.id, assignee: newTask.assignee||proj.leader})} onChange={e=>setNewTask({...newTask, title:e.target.value})} />
+                                                        <button className="bg-slate-800 text-white px-5 py-1.5 rounded-lg text-xs font-black shadow-md">指派</button>
+                                                    </div>
+                                                </form>
+
+                                                <div className="space-y-2 overflow-y-auto max-h-72 custom-scrollbar pr-2">
+                                                    {tasks.filter(t => t.projectId === proj.id).map(t => (
+                                                        <div key={t.id} className="bg-white p-4 rounded-2xl flex items-center justify-between border border-orange-50 group hover:border-orange-200">
+                                                            <div className="flex items-center gap-4">
+                                                                <button onClick={() => setTasks(tasks.map(tk => tk.id === t.id ? {...tk, status: tk.status==='completed'?'pending':'completed'} : tk))} className={t.status === 'completed' ? 'text-emerald-500' : 'text-slate-200'}>
+                                                                    <Icon name="CheckCircle2" size={26} />
+                                                                </button>
+                                                                <div>
+                                                                    <p className={`text-base font-black ${t.status === 'completed' ? 'line-through text-slate-300 font-normal opacity-60' : 'text-slate-800'}`}>{t.title}</p>
+                                                                    <p className="text-[10px] text-slate-400 font-bold italic mt-1 uppercase tracking-tighter">
+                                                                        {formatDate(t.startDate)} - {formatDate(t.endDate)} · {t.assignee}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <button onClick={() => setTasks(tasks.filter(tk => tk.id !== t.id))} className="opacity-0 group-hover:opacity-100 text-red-200 hover:text-red-500"><Icon name="Trash2" size={18}/></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
 
+                        {/* 2. 報表電子報頁面 */}
                         {activeTab === 'weekly' && (
-                            <div className="max-w-4xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700 text-tighter leading-none">
-                                <header className="flex flex-col sm:flex-row justify-between items-center print:hidden gap-6">
-                                    <h2 className="text-3xl font-black text-slate-800 tracking-widest uppercase">工作電子報報表</h2>
-                                    <button onClick={() => window.print()} className="bg-[#F37021] text-white px-8 py-4 rounded-2xl font-black shadow-2xl flex items-center gap-3 active:scale-95 transition-all">
-                                        <Icon name="Printer" size={24} /> 匯出成果 PDF
-                                    </button>
+                            <div className="max-w-4xl mx-auto space-y-10 animate-in fade-in duration-700">
+                                <header className="flex justify-between items-center print:hidden">
+                                    <h2 className="text-3xl font-black text-slate-800 uppercase tracking-widest">工作執行報表</h2>
+                                    <button onClick={() => window.print()} className="bg-[#F37021] text-white px-8 py-4 rounded-2xl font-black shadow-2xl flex items-center gap-3"><Icon name="Printer" /> 匯出 PDF 報表</button>
                                 </header>
-
-                                <div id="newsletter-content" className="bg-white border border-orange-100 shadow-2xl rounded-[3rem] overflow-hidden print:shadow-none print:border-none print:rounded-none">
-                                    <div className="bg-slate-900 text-white p-16 text-center relative overflow-hidden">
-                                        <div className="absolute top-0 right-0 p-10 opacity-10 pointer-events-none scale-150">
-                                            <Icon name="TrendingUp" size={200} className="rotate-12 text-[#F37021]" />
-                                        </div>
+                                <div id="newsletter-content" className="bg-white border border-orange-100 shadow-2xl rounded-[3rem] overflow-hidden print:shadow-none">
+                                    <div className="bg-slate-900 text-white p-16 text-center">
                                         <div className="w-24 h-2 bg-[#F37021] mx-auto mb-8"></div>
-                                        <h1 className="text-5xl font-black tracking-widest uppercase mb-2 leading-none">嘉里集團健康室</h1>
-                                        <p className="text-slate-400 font-bold tracking-[0.4em] text-xs uppercase mb-12 italic leading-none">Kerry TJ Logistics · Health Wellness Hub</p>
-                                        <div className="inline-flex items-center gap-4 bg-white/5 px-8 py-3 rounded-full border border-white/20 text-sm font-black backdrop-blur-xl">
-                                            出刊日期：{formatDate(new Date())}
-                                        </div>
+                                        <h1 className="text-5xl font-black tracking-widest uppercase mb-2">嘉里集團健康室</h1>
+                                        <p className="text-slate-400 font-bold text-xs uppercase italic tracking-[0.3em]">Health Management Report</p>
+                                        <div className="mt-12 bg-white/5 px-8 py-3 rounded-full inline-block text-sm border border-white/10 font-bold italic">報告日期：{formatDate(new Date())}</div>
                                     </div>
-
-                                    <div className="p-12 md:p-24 space-y-24">
+                                    <div className="p-12 md:p-20 space-y-20">
+                                        {/* 核心數據統計區 */}
                                         <section>
-                                            <div className="flex items-center gap-6 mb-12 border-l-8 border-[#F37021] pl-8 text-tighter">
-                                                <div>
-                                                    <h3 className="text-3xl font-black text-slate-900 uppercase leading-none tracking-tighter">年度大專案執行進度</h3>
-                                                    <p className="text-[#F37021] font-black text-[10px] tracking-[0.3em] uppercase mt-3 italic leading-none">Performance Analytics</p>
-                                                </div>
-                                            </div>
+                                            <div className="flex items-center gap-4 mb-10 border-l-8 border-[#F37021] pl-6"><h3 className="text-3xl font-black text-slate-900 uppercase">年度大專案執行進度</h3></div>
                                             <div className="grid gap-12">
-                                                {projectStats.map(stat => (
-                                                    <div key={stat.id}>
-                                                        <div className="flex justify-between items-end mb-4">
-                                                            <div className="flex-1 pr-6">
-                                                                <p className="text-2xl font-black text-slate-800 leading-tight tracking-tight leading-none">{stat.title}</p>
-                                                                <p className="text-[11px] text-slate-400 font-bold mt-2 uppercase italic leading-none">負責人：{stat.leader} | 期間：{formatDate(stat.startDate)} - {formatDate(stat.endDate)}</p>
-                                                            </div>
-                                                            <span className="text-4xl font-black text-[#F37021] leading-none">{stat.percent}%</span>
+                                                {stats.map(s => (
+                                                    <div key={s.id}>
+                                                        <div className="flex justify-between font-black mb-3">
+                                                            <span className="text-xl text-slate-700 leading-none">{s.title}</span>
+                                                            <span className="text-3xl text-[#F37021] leading-none">{s.percent}%</span>
                                                         </div>
-                                                        <div className="w-full bg-slate-100 h-8 rounded-full overflow-hidden shadow-inner border border-slate-50">
-                                                            <div 
-                                                                className={`h-full transition-all duration-[2s] ease-out shadow-lg ${stat.percent === 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-[#F37021] to-[#ff8c42]'}`}
-                                                                style={{ width: `${stat.percent}%` }}
-                                                            ></div>
+                                                        <div className="w-full bg-slate-100 h-6 rounded-full overflow-hidden shadow-inner flex border border-slate-50">
+                                                            <div className="h-full kerry-gradient transition-all duration-1000" style={{width:`${s.percent}%`}}></div>
                                                         </div>
-                                                        <div className="flex justify-between mt-4 px-1 text-[10px] font-black text-slate-300 uppercase tracking-widest italic leading-none">
-                                                            <span>{stat.completed} 已完成任務</span>
-                                                            <span>總需求任務 {stat.total} 項</span>
+                                                        <div className="flex justify-between mt-3 text-[10px] font-black text-slate-300 italic uppercase tracking-widest leading-none">
+                                                            <span>{s.done} 已完成項目</span>
+                                                            <span>總計需求 {s.total} 項</span>
                                                         </div>
                                                     </div>
                                                 ))}
                                             </div>
                                         </section>
 
+                                        {/* 本月摘要 */}
                                         <section>
-                                            <div className="flex items-center gap-6 mb-12 border-l-8 border-slate-800 pl-8 text-tighter leading-none">
-                                                <div>
-                                                    <h3 className="text-3xl font-black text-slate-900 uppercase leading-none tracking-tighter">本月重點執行摘要</h3>
-                                                    <p className="text-slate-400 font-black text-[10px] tracking-[0.3em] uppercase mt-3 italic leading-none">{getMonthName(0)} Key Focus Area</p>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-12">
-                                                <div>
-                                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-3 italic leading-none underline underline-offset-8 decoration-orange-200 decoration-4">Project Highlights</h4>
-                                                    <div className="grid gap-5">
-                                                        {newsletterData.thisMonth.tasks.map(t => (
-                                                            <div key={t.id} className="flex items-center gap-10 bg-orange-50/30 p-8 rounded-3xl border border-orange-50 group hover:bg-white transition-all">
-                                                                <div className="text-center shrink-0 w-16 font-black text-slate-800 text-3xl leading-none">{new Date(t.date).getDate()}日</div>
-                                                                <div className="flex-1"><p className="font-black text-slate-800 text-xl leading-tight tracking-tight leading-none">{t.title}</p><p className="text-[11px] text-slate-400 font-black uppercase italic mt-3 leading-none">執行護理師：{t.assignee}</p></div>
-                                                                {t.status === 'completed' ? <Icon name="CheckCircle2" className="text-emerald-500" size={28} /> : <Icon name="Clock" className="text-slate-200" size={28} />}
-                                                            </div>
-                                                        ))}
+                                            <div className="flex items-center gap-4 mb-10 border-l-8 border-slate-800 pl-6"><h3 className="text-3xl font-black text-slate-900 uppercase">{getMonthName(0)} 重點執行摘要</h3></div>
+                                            <div className="space-y-5">
+                                                {newsletter.thisMonth.map(t=>(
+                                                    <div key={t.id} className="flex items-center gap-8 bg-orange-50/30 p-8 rounded-3xl border border-orange-50">
+                                                        <div className="text-3xl font-black text-slate-800 w-16 text-center border-r border-orange-200">{new Date(t.endDate).getDate()}日</div>
+                                                        <div className="flex-1 font-black text-slate-800 text-xl">{t.title} <span className="text-xs text-[#F37021] font-bold">/ {t.assignee}</span></div>
+                                                        {t.status==='completed'?<Icon name="CheckCircle2" className="text-emerald-500" size={30}/>:<Icon name="Clock" className="text-slate-200" size={30}/>}
                                                     </div>
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-3 italic leading-none underline underline-offset-8 decoration-[#F37021]/30 decoration-4">Recurring Reminders</h4>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                                        {newsletterData.thisMonth.routines.map(r => (
-                                                            <div key={r.id} className="bg-emerald-50/50 p-8 rounded-3xl border border-emerald-100 flex justify-between items-center shadow-inner">
-                                                                <div><p className="font-black text-emerald-900 text-xl tracking-tight leading-none">{r.title}</p><p className="text-[11px] text-emerald-600 font-bold mt-3 uppercase italic leading-none">{r.frequency} | {r.assignee}</p></div>
-                                                                <p className="text-3xl font-black text-emerald-200 italic opacity-60 leading-none">{new Date(r.startDate).getDate()}日</p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
+                                                ))}
+                                                {newsletter.thisMonth.length === 0 && <p className="text-slate-300 font-bold italic text-center py-10 border-2 border-dashed border-orange-100 rounded-3xl">本月無截止任務</p>}
                                             </div>
                                         </section>
 
+                                        {/* 次月規劃 */}
                                         <section>
-                                            <div className="flex items-center gap-6 mb-12 border-l-8 border-orange-400 pl-8 text-tighter leading-none">
-                                                <div>
-                                                    <h3 className="text-3xl font-black text-slate-900 uppercase leading-none tracking-tighter">次月規劃與預告</h3>
-                                                    <p className="text-orange-400 font-black text-[10px] tracking-[0.3em] uppercase mt-3 italic leading-none">{getMonthName(1)} Future Outlook</p>
-                                                </div>
-                                            </div>
-                                            <div className="bg-orange-50/30 rounded-[3rem] p-16 border border-orange-100 shadow-inner space-y-16">
-                                                <div>
-                                                    <h4 className="text-[11px] font-black text-[#F37021] uppercase mb-8 italic tracking-widest leading-none border-b-2 border-orange-100 pb-2">Upcoming Tasks (下月摘要)</h4>
-                                                    <div className="grid gap-8">
-                                                        {newsletterData.nextMonth.tasks.map(t => (
-                                                            <div key={t.id} className="flex gap-8 items-start group">
-                                                                <div className="w-3 h-3 rounded-full bg-[#F37021] mt-2.5 shrink-0 shadow-lg group-hover:scale-125 transition-transform"></div>
-                                                                <div><p className="font-black text-slate-800 text-2xl leading-tight tracking-tight leading-none">{t.title}</p><p className="text-[11px] text-slate-400 font-bold italic mt-2 uppercase leading-none tracking-widest">{formatDate(t.date)} · 執行人：{t.assignee}</p></div>
-                                                            </div>
-                                                        ))}
+                                            <div className="flex items-center gap-4 mb-10 border-l-8 border-orange-400 pl-6"><h3 className="text-3xl font-black text-slate-900 uppercase">{getMonthName(1)} 次月規劃預告</h3></div>
+                                            <div className="bg-slate-50 p-12 rounded-[3.5rem] border border-slate-100 space-y-8">
+                                                {newsletter.nextMonth.map(t=>(
+                                                    <div key={t.id} className="flex gap-6 items-start">
+                                                        <div className="w-3 h-3 rounded-full bg-[#F37021] mt-2 shadow-lg shadow-orange-200"></div>
+                                                        <div><p className="font-black text-slate-800 text-2xl">{t.title}</p><p className="text-xs text-slate-400 font-bold mt-2 uppercase italic">{formatDate(t.startDate)} - {formatDate(t.endDate)} · 負責：{t.assignee}</p></div>
                                                     </div>
-                                                </div>
+                                                ))}
+                                                {newsletter.nextMonth.length === 0 && <p className="text-slate-300 font-bold italic text-center">下月暫無計畫任務</p>}
                                             </div>
                                         </section>
-
-                                        <div className="pt-24 border-t border-orange-100 flex flex-col md:flex-row justify-between items-center text-[11px] text-slate-300 gap-6 font-black uppercase italic tracking-[0.3em] leading-none">
-                                            <p>© 2026 嘉里集團健康室 職護團隊</p>
-                                            <p>Kerry TJ Logistics · Health & Wellness</p>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
+                        {/* 3. 常規管理頁面 */}
                         {activeTab === 'routine' && (
-                            <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-500 leading-none">
-                                <header className="flex justify-between items-end gap-6 text-tighter">
-                                    <div>
-                                        <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none uppercase">常規事項管理中心</h2>
-                                        <p className="text-[#F37021] font-bold mt-4">維護定期行政與醫務常規工作清單（支援起訖日期週期設定）</p>
-                                    </div>
-                                    <div className="flex gap-4 tracking-widest uppercase">
-                                        <button onClick={() => setShowImportModal(true)} className="bg-white border-2 border-orange-100 text-slate-600 px-8 py-4 rounded-3xl font-black hover:bg-slate-50 transition-all shadow-md flex items-center gap-2 leading-none leading-none"><Icon name="Upload" size={20} /> Import</button>
-                                        <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-8 py-4 rounded-3xl font-black hover:bg-emerald-700 shadow-xl flex items-center gap-2 leading-none active:scale-95 transition-all"><Icon name="Download" size={20} /> Export</button>
-                                    </div>
+                            <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in">
+                                <header className="flex justify-between items-end">
+                                    <div><h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">常規事項中心</h2><p className="text-[#F37021] font-bold mt-2">護理站每日/週/月固定行政清單</p></div>
+                                    <button onClick={()=>setShowImportModal(true)} className="bg-white border-2 border-orange-100 text-slate-500 px-8 py-4 rounded-3xl font-black shadow-sm flex items-center gap-2 hover:bg-orange-50 transition-all"><Icon name="Upload"/> 批量匯入 CSV</button>
                                 </header>
-                                <div className="bg-white rounded-[3rem] shadow-sm border border-orange-100 overflow-hidden leading-none">
-                                    <div className="p-12 bg-orange-50/20 border-b border-orange-100 text-tighter font-bold">
-                                        <form onSubmit={handleAddRoutine} className="flex flex-wrap gap-8 text-sm">
-                                            <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
-                                                <div className="space-y-2"><p className="text-[10px] text-slate-400 pl-2 uppercase tracking-widest leading-none">Start Date</p><input type="date" className="border-2 border-orange-100 rounded-2xl px-5 py-4 bg-white shadow-sm outline-none focus:ring-4 focus:ring-orange-100" value={newRoutine.startDate} onChange={e => setNewRoutine({...newRoutine, startDate: e.target.value})} /></div>
-                                                <div className="space-y-2"><p className="text-[10px] text-slate-400 pl-2 uppercase tracking-widest leading-none">End Date</p><input type="date" className="border-2 border-orange-100 rounded-2xl px-5 py-4 bg-white shadow-sm outline-none focus:ring-4 focus:ring-orange-100" value={newRoutine.endDate} onChange={e => setNewRoutine({...newRoutine, endDate: e.target.value})} /></div>
-                                            </div>
-                                            <div className="flex-1 min-w-[300px] space-y-2">
-                                                <p className="text-[10px] text-slate-400 pl-2 uppercase tracking-widest leading-none">Description</p>
-                                                <input placeholder="輸入常規工作項目名稱..." className="w-full border-2 border-orange-100 rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-orange-100 font-black shadow-sm" value={newRoutine.title} onChange={e => setNewRoutine({...newRoutine, title: e.target.value})} />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <p className="text-[10px] text-slate-400 pl-2 uppercase tracking-widest leading-none">Frequency</p>
-                                                <select className="border-2 border-orange-100 rounded-2xl px-6 py-4 outline-none bg-white font-black shadow-sm appearance-none pr-10" value={newRoutine.frequency} onChange={e => setNewRoutine({...newRoutine, frequency: e.target.value})}>
-                                                    <option>每日</option><option>每週</option><option>每月</option><option>每半年</option><option>每年</option>
-                                                </select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <p className="text-[10px] text-slate-400 pl-2 uppercase tracking-widest leading-none">Owner</p>
-                                                <select className="border-2 border-orange-100 rounded-2xl px-6 py-4 outline-none bg-white font-black shadow-sm appearance-none pr-10" value={newRoutine.assignee} onChange={e => setNewRoutine({...newRoutine, assignee: e.target.value})}>
-                                                    {memberNames.map(m => <option key={m} value={m}>{m}</option>)}
-                                                </select>
-                                            </div>
-                                            <button type="submit" className="bg-[#F37021] text-white px-12 py-4 rounded-2xl font-black shadow-xl hover:bg-orange-700 self-end mb-1 transition-all uppercase tracking-widest leading-none">Add</button>
+                                <div className="bg-white rounded-[3rem] border border-orange-100 overflow-hidden shadow-sm">
+                                    <div className="p-10 bg-orange-50/20 border-b border-orange-100">
+                                        <form onSubmit={handleAddRoutine} className="flex flex-wrap gap-8 items-end">
+                                            <div className="flex-1 min-w-[250px] space-y-2"><label className="text-[10px] font-black text-slate-400 ml-2 uppercase tracking-widest">常規工作名稱</label><input required className="w-full border-2 border-orange-100 rounded-2xl px-6 py-4 outline-none font-black shadow-inner" placeholder="醫藥箱點檢..." value={newRoutine.title} onChange={e=>setNewRoutine({...newRoutine, title:e.target.value})}/></div>
+                                            <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 ml-2 uppercase">週期頻率</label><select className="border-2 border-orange-100 rounded-2xl px-8 py-4 bg-white font-black" value={newRoutine.frequency} onChange={e=>setNewRoutine({...newRoutine, frequency:e.target.value})}><option>每日</option><option>每週</option><option>每月</option><option>每半年</option></select></div>
+                                            <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 ml-2 uppercase">固定負責人</label><select required className="border-2 border-orange-100 rounded-2xl px-8 py-4 bg-white font-black" value={newRoutine.assignee} onChange={e=>setNewRoutine({...newRoutine, assignee:e.target.value})}><option value="">請選擇</option>{memberNames.map(n=><option key={n}>{n}</option>)}</select></div>
+                                            <button className="bg-[#F37021] text-white px-12 py-4 rounded-2xl font-black shadow-xl mb-1">加入常規</button>
                                         </form>
                                     </div>
-                                    <div className="overflow-x-auto text-tighter">
-                                        <table className="w-full text-left">
-                                            <thead>
-                                                <tr className="bg-slate-50 text-[11px] font-black uppercase tracking-[0.25em] text-slate-400 border-b"><th className="px-12 py-8">預計執行週期</th><th className="px-12 py-8">工作項目</th><th className="px-12 py-8">頻率</th><th className="px-12 py-8">負責護理師</th><th className="px-12 py-8 text-right">管理</th></tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-orange-50">
-                                                {sortedRoutines.map(r => (
-                                                    <tr key={r.id} className="hover:bg-orange-50/20 transition-colors text-sm">
-                                                        <td className="px-12 py-8 text-[11px] font-black text-slate-400 italic leading-relaxed leading-none">{formatDate(r.startDate)} <br/> - {formatDate(r.endDate)}</td>
-                                                        <td className="px-12 py-8 font-black text-slate-800 text-xl tracking-tight leading-none leading-none">{r.title}</td>
-                                                        <td className="px-12 py-8 leading-none leading-none"><span className="bg-orange-100 text-[#F37021] px-5 py-2 rounded-full text-[11px] font-black border border-orange-200 uppercase tracking-widest leading-none">{r.frequency}</span></td>
-                                                        <td className="px-12 py-8 text-base font-bold text-slate-500 leading-none leading-none">{r.assignee}</td>
-                                                        <td className="px-12 py-8 text-right leading-none leading-none">
-                                                                        <button onClick={() => { if(window.confirm('確定刪除此項常規工作？')) { const { getFirestore, doc, deleteDoc } = window.FB_SDK; deleteDoc(doc(getFirestore(), 'artifacts', getAppId(), 'public', 'data', 'routines', r.id)); } }} className="text-slate-200 hover:text-red-500 transition-all p-4 rounded-xl hover:bg-red-50"><Icon name="Trash2" size={24}/></button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                    <table className="w-full text-left">
+                                        <thead className="bg-slate-50 text-[10px] uppercase font-black text-slate-400 border-b"><th className="px-12 py-8 tracking-widest">工作內容</th><th className="px-12 py-8 tracking-widest">執行頻率</th><th className="px-12 py-8 tracking-widest">指定人員</th><th className="px-12 py-8 text-right tracking-widest">管理</th></thead>
+                                        <tbody className="divide-y divide-orange-50">
+                                            {routines.map(r=>(
+                                                <tr key={r.id} className="hover:bg-orange-50/10 transition-colors"><td className="px-12 py-8 font-black text-slate-800 text-xl tracking-tight">{r.title}</td><td className="px-12 py-8"><span className="bg-orange-100 text-[#F37021] px-5 py-2 rounded-full text-[11px] font-black border border-orange-200">{r.frequency}</span></td><td className="px-12 py-8 font-bold text-slate-500 italic">{r.assignee}</td><td className="px-12 py-8 text-right"><button onClick={()=>setRoutines(routines.filter(rk=>rk.id!==r.id))} className="text-slate-200 hover:text-red-500 p-4 transition-colors"><Icon name="Trash2" size={24}/></button></td></tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         )}
 
+                        {/* 4. 系統設定 (成員編輯) */}
                         {activeTab === 'settings' && (
-                             <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500 leading-none text-tighter">
-                                <h2 className="text-5xl font-black text-slate-900 tracking-tighter text-tighter uppercase leading-none">系統設定中心</h2>
-                                <div className="bg-white rounded-[3rem] border border-orange-100 shadow-sm overflow-hidden">
-                                    <div className="p-12 border-b border-orange-50 bg-white text-tighter font-bold">
-                                        <h3 className="font-black flex items-center gap-4 text-[#F37021] text-2xl mb-8 leading-none uppercase tracking-widest"><Icon name="Users" size={32} /> Team Management</h3>
-                                        <div className="flex gap-4">
-                                            <input className="flex-1 border-2 border-orange-100 rounded-3xl px-8 py-5 bg-orange-50/30 outline-none font-black text-lg focus:bg-white transition-all shadow-inner" placeholder="輸入新成員姓名..." value={newMemberName} onChange={e => setNewMemberName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMember()} />
-                                            <button onClick={addMember} className="bg-[#F37021] text-white px-12 py-5 rounded-3xl font-black shadow-xl text-lg active:scale-95 transition-all">新增</button>
-                                        </div>
-                                    </div>
-                                    <div className="divide-y divide-orange-50 max-h-[600px] overflow-y-auto">
-                                        {members.map(m => (
-                                            <div key={m.id} className="p-8 flex items-center justify-between px-12 hover:bg-orange-50/30 transition-colors text-tighter">
-                                                <div className="flex items-center gap-6 text-tighter leading-none">
-                                                    <div className="w-14 h-14 kerry-gradient rounded-full flex items-center justify-center text-white font-black text-xl shadow-lg leading-none">{m.name.charAt(0)}</div>
-                                                    <span className="font-black text-slate-800 text-2xl tracking-tight leading-none">{m.name}</span>
-                                                </div>
-                                                <button onClick={() => { if(window.confirm('確定刪除該成員？其指派工作將失去負責標記。')) { const { getFirestore, doc, deleteDoc } = window.FB_SDK; deleteDoc(doc(getFirestore(), 'artifacts', getAppId(), 'public', 'data', 'members', m.id)); } }} className="text-slate-200 hover:text-red-500 transition-all p-4 rounded-2xl hover:bg-red-50"><Icon name="Trash2" size={24}/></button>
-                                            </div>
-                                        ))}
+                            <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in">
+                                <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">團隊與系統管理</h2>
+                                <div className="bg-white rounded-[3.5rem] p-16 border border-orange-100 shadow-sm space-y-10">
+                                    <h3 className="font-black text-[#F37021] text-3xl flex items-center gap-4 italic uppercase"><Icon name="Users" size={36}/> 護理師團隊名單</h3>
+                                    <div className="flex gap-4"><input className="flex-1 border-2 border-orange-100 rounded-[2rem] px-8 py-5 outline-none font-black text-xl shadow-inner bg-orange-50/30 focus:bg-white" placeholder="新成員姓名..." value={newMemberName} onChange={e=>setNewMemberName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&document.getElementById('addBtn').click()}/><button id="addBtn" onClick={()=>{if(newMemberName){setMembers([...members,{id:'m'+Date.now(),name:newMemberName}]); setNewMemberName(''); showMsg('成員已新增');}}} className="bg-[#F37021] text-white px-12 py-5 rounded-[2rem] font-black shadow-xl hover:bg-black transition-all">新增</button></div>
+                                    <div className="space-y-4">
+                                        {members.map(m=>(<div key={m.id} className="flex justify-between items-center p-8 bg-orange-50/20 rounded-[2.5rem] px-12 border border-transparent hover:border-orange-100 transition-all"><span className="font-black text-slate-800 text-3xl tracking-tighter">{m.name}</span><button onClick={()=>setMembers(members.filter(me=>me.id!==m.id))} className="text-red-100 hover:text-red-500 p-4 transition-colors"><Icon name="Trash2" size={28}/></button></div>))}
                                     </div>
                                 </div>
                             </div>
                         )}
                         
+                        {/* 5. 個人工作中心 */}
                         {memberNames.includes(activeTab) && (
-                            <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in duration-500 text-tighter leading-none">
-                                <header className="flex items-center gap-10 leading-none text-tighter leading-none">
-                                    <div className="w-28 h-28 kerry-gradient rounded-[2.5rem] flex items-center justify-center text-white text-5xl font-black shadow-2xl leading-none tracking-tighter">{activeTab.charAt(0)}</div>
-                                    <div><h2 className="text-5xl font-black text-slate-900 tracking-tighter leading-none">{activeTab} 的雲端工作中心</h2><p className="text-[#F37021] font-black uppercase text-sm tracking-[0.4em] italic mt-4 font-sans leading-none tracking-widest">Kerry TJ Logistics · Health Unit</p></div>
+                             <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in duration-500">
+                                <header className="flex items-center gap-10">
+                                    <div className="w-28 h-28 kerry-gradient rounded-[3rem] flex items-center justify-center text-white text-6xl font-black shadow-2xl">{activeTab.charAt(0)}</div>
+                                    <div><h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase">{activeTab} 的雲端工作中心</h2><p className="text-[#F37021] font-black uppercase text-sm italic mt-4 tracking-[0.3em]">Personal Workspace</p></div>
                                 </header>
-                                <div className="grid lg:grid-cols-2 gap-12 text-tighter leading-none">
-                                    <div className="bg-white p-12 rounded-[4rem] border border-orange-100 shadow-sm flex flex-col h-[700px] overflow-hidden hover:border-orange-200 transition-all">
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] mb-10 border-l-8 border-[#F37021] pl-6 italic leading-none">Assigned Project Tasks</h3>
-                                        <div className="space-y-5 flex-1 overflow-y-auto custom-scrollbar pr-4">
-                                            {sortedTasks.filter(t => t.assignee === activeTab).map(t => (
-                                                <div key={t.id} className="flex items-center gap-6 p-8 bg-orange-50/20 rounded-[2rem] border border-orange-100 transition-all hover:bg-white shadow-sm group">
-                                                    <button onClick={() => toggleTaskStatus(t)} className={t.status === 'completed' ? 'text-emerald-500' : 'text-slate-300 group-hover:text-[#F37021] transition-all'}><Icon name="CheckCircle2" size={32} /></button>
-                                                    <div className="flex-1"><p className={`text-xl font-black tracking-tight leading-tight leading-none ${t.status === 'completed' ? 'line-through text-slate-300 font-normal opacity-60' : 'text-slate-800'}`}>{t.title}</p><p className="text-[11px] text-slate-400 font-bold italic mt-3 uppercase tracking-widest leading-none tracking-tight">{formatDate(t.date)} · Project: {projects.find(p => p.id === t.projectId)?.title}</p></div>
+                                <div className="grid lg:grid-cols-2 gap-10">
+                                    <div className="bg-white p-12 rounded-[4rem] border border-orange-100 shadow-sm min-h-[500px]">
+                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 border-l-8 border-[#F37021] pl-6 italic">已分派專案任務</h3>
+                                        <div className="space-y-5 flex-1">
+                                            {tasks.filter(t=>t.assignee===activeTab).map(t=>(
+                                                <div key={t.id} className="p-8 bg-orange-50/20 rounded-[2.5rem] border border-orange-100 flex items-center gap-6 group hover:bg-white transition-all">
+                                                    <button onClick={() => setTasks(tasks.map(tk => tk.id===t.id?{...tk,status:tk.status==='completed'?'pending':'completed'}:tk))} className={t.status === 'completed' ? 'text-emerald-500' : 'text-slate-300'}><Icon name="CheckCircle2" size={32} /></button>
+                                                    <div><p className={`text-xl font-black tracking-tight ${t.status==='completed'?'line-through text-slate-300 font-normal':''}`}>{t.title}</p><p className="text-xs text-slate-400 font-bold mt-2 uppercase italic">{formatDate(t.startDate)} - {formatDate(t.endDate)}</p></div>
                                                 </div>
                                             ))}
-                                            {sortedTasks.filter(t => t.assignee === activeTab).length === 0 && <div className="py-32 text-center font-black text-slate-200 uppercase tracking-[0.5em] italic text-xl opacity-30">No assignments for now</div>}
+                                            {tasks.filter(t=>t.assignee===activeTab).length===0 && <p className="py-20 text-center font-black text-slate-200 italic text-xl">目前暫無任務</p>}
                                         </div>
                                     </div>
-                                    <div className="bg-white p-12 rounded-[4rem] border border-orange-100 shadow-sm flex flex-col h-[700px] overflow-hidden hover:border-emerald-200 transition-all">
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] mb-10 border-l-8 border-emerald-400 pl-6 italic leading-none">Medical Routine Biz</h3>
-                                        <div className="space-y-5 flex-1 overflow-y-auto custom-scrollbar pr-4">
-                                            {sortedRoutines.filter(r => r.assignee === activeTab).map(r => (
-                                                <div key={r.id} className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 shadow-inner group hover:bg-white transition-all">
-                                                    <p className="text-2xl font-black text-slate-800 leading-tight tracking-tight group-hover:text-[#F37021] transition-colors leading-none">{r.title}</p>
-                                                    <p className="text-[11px] text-[#F37021] font-black tracking-[0.2em] mt-4 uppercase italic flex items-center gap-3 leading-none leading-none"><Icon name="Calendar" size={14} /> {formatDate(r.startDate)} - {formatDate(r.endDate)}</p>
-                                                </div>
+                                    <div className="bg-white p-12 rounded-[4rem] border border-orange-100 shadow-sm min-h-[500px]">
+                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-10 border-l-8 border-emerald-400 pl-6 italic">固定常規行政</h3>
+                                        <div className="space-y-5">
+                                            {routines.filter(r=>r.assignee===activeTab).map(r=>(
+                                                <div key={r.id} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 group hover:border-[#F37021] transition-all"><p className="text-2xl font-black text-slate-800 tracking-tight group-hover:text-[#F37021] transition-colors">{r.title}</p><p className="text-xs text-[#F37021] font-black mt-4 uppercase tracking-[0.2em]">週期：{r.frequency}</p></div>
                                             ))}
-                                            {sortedRoutines.filter(r => r.assignee === activeTab).length === 0 && <div className="py-32 text-center font-black text-slate-200 uppercase tracking-[0.5em] italic text-xl opacity-30">No routines assigned</div>}
+                                            {routines.filter(r=>r.assignee===activeTab).length===0 && <p className="py-20 text-center font-black text-slate-200 italic text-xl">目前無常規事務</p>}
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                             </div>
                         )}
                     </main>
 
-                    {/* 年度大專案 Modal */}
+                    {/* --- MODALS --- */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[60] flex items-center justify-center p-6 text-sm font-bold">
-                            <div className="bg-white rounded-[4rem] w-full max-w-2xl shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] p-16 animate-in zoom-in duration-300">
-                                <h3 className="text-4xl font-black text-slate-900 italic tracking-tighter uppercase mb-12 leading-none text-tighter">啟動年度大專案</h3>
-                                <form onSubmit={handleAddProject} className="space-y-10 leading-none">
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] uppercase font-black tracking-[0.4em] text-slate-400 pl-2">Project Title</label>
-                                        <input required className="w-full border-2 border-orange-50 rounded-3xl px-8 py-5 bg-orange-50/30 outline-none focus:bg-white text-xl font-black transition-all shadow-inner" placeholder="輸入計畫主題名稱..." value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} />
+                        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[60] flex items-center justify-center p-6">
+                            <div className="bg-white rounded-[4rem] w-full max-w-xl p-16 shadow-2xl animate-in zoom-in duration-300">
+                                <h3 className="text-4xl font-black mb-10 tracking-tighter uppercase italic text-slate-900 border-b-4 border-[#F37021] pb-4 inline-block">啟動年度大專案</h3>
+                                <form onSubmit={handleAddProject} className="space-y-8">
+                                    <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase ml-2">Project Title</label><input required className="w-full border-2 border-orange-50 rounded-[2rem] px-8 py-5 outline-none font-black text-xl bg-orange-50/30 focus:bg-white transition-all" placeholder="輸入專案名稱..." value={projectForm.title} onChange={e=>setProjectForm({...projectForm, title:e.target.value})} /></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">START</label><input type="date" required className="w-full border-2 border-orange-50 rounded-[1.5rem] px-6 py-4 font-bold bg-orange-50/30" value={projectForm.startDate} onChange={e=>setProjectForm({...projectForm, startDate:e.target.value})} /></div>
+                                        <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">END</label><input type="date" required className="w-full border-2 border-orange-50 rounded-[1.5rem] px-6 py-4 font-bold bg-orange-50/30" value={projectForm.endDate} onChange={e=>setProjectForm({...projectForm, endDate:e.target.value})} /></div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-8 text-tighter">
-                                        <div className="space-y-3"><label className="text-[10px] uppercase font-black tracking-[0.4em] text-slate-400 pl-2 leading-none">Start Date</label><input type="date" className="w-full border-2 border-orange-50 rounded-3xl px-6 py-4 bg-orange-50/30 outline-none font-black shadow-inner" value={projectForm.startDate} onChange={e => setProjectForm({...projectForm, startDate: e.target.value})} /></div>
-                                        <div className="space-y-3"><label className="text-[10px] uppercase font-black tracking-[0.4em] text-slate-400 pl-2 leading-none">End Date</label><input type="date" className="w-full border-2 border-orange-50 rounded-3xl px-6 py-4 bg-orange-50/30 outline-none font-black shadow-inner" value={projectForm.endDate} onChange={e => setProjectForm({...projectForm, endDate: e.target.value})} /></div>
-                                    </div>
-                                    <div className="space-y-3 text-tighter leading-none">
-                                        <label className="text-[10px] uppercase font-black tracking-[0.4em] text-slate-400 pl-2">Team Leader</label>
-                                        <select className="w-full border-2 border-orange-50 rounded-3xl px-8 py-5 bg-orange-50/30 outline-none appearance-none font-black text-lg shadow-inner" value={projectForm.leader} onChange={e => setProjectForm({...projectForm, leader: e.target.value})}>
-                                            <option value="">選擇主要負責人</option>
-                                            {memberNames.map(m => <option key={m} value={m}>{m}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-3 leading-none">
-                                        <label className="text-[10px] uppercase font-black tracking-[0.4em] text-slate-400 pl-2">Summary</label>
-                                        <textarea className="w-full border-2 border-orange-50 rounded-3xl px-8 py-5 bg-orange-50/30 h-40 outline-none resize-none font-bold shadow-inner" placeholder="描述此專案計畫之範疇與目標..." value={projectForm.description} onChange={e => setProjectForm({...projectForm, description: e.target.value})} />
-                                    </div>
-                                    <div className="flex gap-6 leading-none uppercase tracking-widest">
-                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-100 text-slate-400 py-6 rounded-[2rem] font-black text-xl hover:bg-slate-200 transition-all uppercase tracking-widest">Cancel</button>
-                                        <button type="submit" className="flex-[2] kerry-gradient text-white py-6 rounded-[2rem] font-black text-2xl shadow-2xl shadow-orange-200 hover:scale-105 active:scale-95 transition-all">Launch</button>
+                                    <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Primary Leader</label><select required className="w-full border-2 border-orange-50 rounded-[2rem] px-8 py-5 font-black text-lg bg-white" value={projectForm.leader} onChange={e=>setProjectForm({...projectForm, leader:e.target.value})}><option value="">請選擇專案負責人</option>{memberNames.map(n=><option key={n} value={n}>{n}</option>)}</select></div>
+                                    <div className="flex flex-col gap-4 pt-4">
+                                        <button className="w-full kerry-gradient text-white py-6 rounded-[2rem] font-black shadow-2xl text-2xl hover:scale-105 active:scale-95 transition-all">Create Project</button>
+                                        <button type="button" onClick={()=>setIsModalOpen(false)} className="w-full text-slate-300 font-bold uppercase tracking-widest text-sm">Cancel</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                     )}
-
+                    
                     {isEditModalOpen && (
-                        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[60] flex items-center justify-center p-6 text-sm font-bold leading-none text-tighter">
-                            <div className="bg-white rounded-[4rem] w-full max-w-2xl shadow-2xl p-16 animate-in zoom-in duration-300">
-                                <h3 className="text-4xl font-black text-slate-900 italic tracking-tighter uppercase mb-12 leading-none text-tighter">編輯專案主檔</h3>
-                                <form onSubmit={handleUpdateProject} className="space-y-10 leading-none">
-                                    <input required className="w-full border-2 border-orange-50 rounded-3xl px-8 py-5 bg-orange-50/30 outline-none focus:bg-white text-xl font-black transition-all shadow-inner" value={projectForm.title} onChange={e => setProjectForm({...projectForm, title: e.target.value})} />
-                                    <div className="grid grid-cols-2 gap-8 text-tighter leading-none">
-                                        <input type="date" className="w-full border-2 border-orange-50 rounded-3xl px-6 py-4 bg-orange-50/30 outline-none font-black shadow-inner" value={projectForm.startDate} onChange={e => setProjectForm({...projectForm, startDate: e.target.value})} />
-                                        <input type="date" className="w-full border-2 border-orange-50 rounded-3xl px-6 py-4 bg-orange-50/30 outline-none font-black shadow-inner" value={projectForm.endDate} onChange={e => setProjectForm({...projectForm, endDate: e.target.value})} />
+                        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[60] flex items-center justify-center p-6">
+                            <div className="bg-white rounded-[4rem] w-full max-w-xl p-16 shadow-2xl animate-in zoom-in duration-300">
+                                <h3 className="text-3xl font-black mb-10 tracking-tighter uppercase italic">編輯專案主檔</h3>
+                                <div className="space-y-8">
+                                    <input className="w-full border-2 border-orange-50 rounded-[2rem] px-8 py-5 outline-none font-black text-xl" value={projectForm.title} onChange={e=>setProjectForm({...projectForm, title:e.target.value})} />
+                                    <div className="flex gap-4">
+                                        <button onClick={()=>{setProjects(projects.map(p=>p.id===projectForm.id?projectForm:p)); setIsEditModalOpen(false); showMsg('專案已更新');}} className="flex-1 bg-slate-900 text-white py-5 rounded-[2rem] font-black text-xl shadow-xl">儲存修改</button>
+                                        <button onClick={()=>{if(confirm('確定刪除？此操作不可恢復。')){setProjects(projects.filter(p=>p.id!==projectForm.id)); setTasks(tasks.filter(tk=>tk.projectId!==projectForm.id)); setIsEditModalOpen(false); showMsg('專案已永久刪除');}}} className="bg-red-50 text-red-500 px-8 py-5 rounded-[2rem] font-black">永久刪除</button>
                                     </div>
-                                    <select className="w-full border-2 border-orange-50 rounded-3xl px-8 py-5 bg-orange-50/30 outline-none appearance-none font-black text-lg shadow-inner text-tighter leading-none" value={projectForm.leader} onChange={e => setProjectForm({...projectForm, leader: e.target.value})}>
-                                        {memberNames.map(m => <option key={m} value={m}>{m}</option>)}
-                                    </select>
-                                    <textarea className="w-full border-2 border-orange-50 rounded-3xl px-8 py-5 bg-orange-50/30 h-40 outline-none resize-none font-bold shadow-inner" value={projectForm.description} onChange={e => setProjectForm({...projectForm, description: e.target.value})} />
-                                    <div className="pt-4 flex gap-6 text-tighter leading-none uppercase tracking-widest">
-                                        <button type="button" onClick={() => { if(window.confirm('確定刪除計畫？所有任務也將遺失。')) { const { getFirestore, doc, deleteDoc } = window.FB_SDK; deleteDoc(doc(getFirestore(), 'artifacts', getAppId(), 'public', 'data', 'projects', projectForm.id)); setIsEditModalOpen(false); } }} className="px-10 text-red-500 font-black hover:bg-red-50 rounded-3xl text-lg transition-all underline underline-offset-8 decoration-red-200">Delete</button>
-                                        <button type="submit" className="flex-1 bg-slate-900 text-white py-6 rounded-[2rem] font-black text-2xl shadow-2xl hover:bg-black transition-all">Update</button>
-                                    </div>
-                                </form>
+                                    <button onClick={()=>setIsEditModalOpen(false)} className="w-full text-slate-300 font-bold uppercase text-sm tracking-widest">Close</button>
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {showImportModal && (
-                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 text-tighter leading-none text-tighter leading-none">
-                            <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl p-16 space-y-8 animate-in zoom-in duration-300">
-                                <h3 className="text-4xl font-black flex items-center gap-5 italic tracking-tight uppercase leading-none leading-none leading-none"><Icon name="Upload" size={32} className="text-[#F37021]" /> 批量匯入常規工作</h3>
-                                <p className="text-base text-slate-500 font-bold leading-relaxed border-l-4 border-orange-200 pl-6">格式要求：<code className="bg-orange-50 px-2 py-1 rounded text-[#F37021] font-black">項目名稱,執行頻率,負責人姓名</code> (每行一筆資料)</p>
-                                <textarea className="w-full h-80 border-2 border-orange-100 rounded-[2.5rem] p-10 outline-none font-mono text-lg leading-relaxed bg-slate-50 custom-scrollbar shadow-inner" placeholder="例如：&#10;盤點醫藥箱,每月,羽瑩&#10;消防設備檢查,每半年,嘉莉" value={importText} onChange={e => setImportText(e.target.value)} />
-                                <div className="flex justify-end gap-6 pt-4 uppercase tracking-widest leading-none leading-none">
-                                    <button onClick={() => setShowImportModal(false)} className="px-10 py-4 text-slate-400 font-black hover:text-slate-800 transition-colors uppercase tracking-widest leading-none">Cancel</button>
-                                    <button onClick={handleImportCSV} className="bg-[#F37021] text-white px-12 py-5 rounded-[2rem] font-black shadow-2xl hover:bg-orange-700 transition-all text-xl leading-none">Import</button>
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+                            <div className="bg-white rounded-[3.5rem] w-full max-w-2xl p-16 shadow-2xl animate-in zoom-in duration-300">
+                                <h3 className="text-3xl font-black mb-6 flex items-center gap-4 italic tracking-tight uppercase"><Icon name="Upload" className="text-[#F37021]" size={32}/> 批量 CSV 匯入</h3>
+                                <p className="text-xs text-slate-400 font-bold mb-6 border-l-4 border-orange-200 pl-4 uppercase tracking-widest">格式：項目名稱,頻率,負責人 (每行一筆資料)</p>
+                                <textarea className="w-full h-72 border-2 border-orange-50 rounded-[2.5rem] p-8 outline-none bg-slate-50 mb-8 font-bold text-slate-600 shadow-inner" placeholder="醫藥箱點檢,每月,羽瑩&#10;AED檢查,每週,嘉莉" value={importText} onChange={e=>setImportText(e.target.value)} />
+                                <div className="flex gap-4">
+                                    <button onClick={handleImportCSV} className="flex-1 kerry-gradient text-white py-5 rounded-[2rem] font-black text-xl shadow-2xl hover:scale-105 transition-all">執行批量匯入</button>
+                                    <button onClick={()=>setShowImportModal(false)} className="px-8 py-5 text-slate-400 font-black uppercase text-sm tracking-widest">取消離開</button>
                                 </div>
                             </div>
                         </div>
