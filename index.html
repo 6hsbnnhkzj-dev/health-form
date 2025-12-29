@@ -3,12 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 血壓智能紀錄助手 (本地版)</title>
-    <!-- Tailwind CSS CDN -->
+    <title>血壓智能紀錄助手 (本地版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- SheetJS (用於匯出 Excel) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
@@ -24,7 +21,6 @@
 
     <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        <!-- 左側：輸入面板 -->
         <div class="lg:col-span-5 space-y-6">
             <header class="bg-white rounded-3xl p-6 shadow-sm flex items-center justify-between border border-slate-200">
                 <div class="flex items-center gap-3">
@@ -32,13 +28,9 @@
                         <i data-lucide="activity" size="28"></i>
                     </div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight">AI 血壓助手</h1>
+                        <h1 class="text-xl font-black tracking-tight">血壓紀錄助手</h1>
                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">本地儲存版 v6.0</p>
                     </div>
-                </div>
-                <div id="scan-status" class="hidden flex items-center gap-2 bg-blue-50 text-blue-600 px-3 py-1.5 rounded-xl font-bold text-[10px]">
-                    <i data-lucide="loader-2" class="animate-spin w-4 h-4"></i>
-                    <span id="status-text">處理中...</span>
                 </div>
             </header>
 
@@ -48,19 +40,18 @@
                         <i data-lucide="clipboard-check" class="text-blue-500"></i>
                         數據錄入
                     </h2>
-                    <label class="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-2xl cursor-pointer hover:bg-blue-600 transition-all font-black text-xs shadow-xl active:scale-95 group">
+                    <label class="flex items-center gap-2 bg-slate-100 text-slate-600 px-5 py-3 rounded-2xl cursor-pointer hover:bg-slate-200 transition-all font-black text-xs active:scale-95 group">
                         <i data-lucide="camera" class="w-5 h-5"></i>
-                        拍照辨識
+                        拍照存證 (選填)
                         <input type="file" id="camera-input" accept="image/*" capture="camera" class="hidden">
                     </label>
                 </div>
 
-                <!-- 照片預覽區 -->
                 <div id="preview-container" class="hidden mb-6 p-2.5 bg-blue-50 rounded-2xl flex items-center gap-4 border border-blue-100 animate-in">
                     <img id="image-preview" src="" class="w-20 h-20 object-cover rounded-xl shadow-md border-2 border-white">
                     <div class="flex-1">
-                        <p class="text-sm font-black text-blue-700">影像已載入</p>
-                        <p class="text-[10px] text-blue-400 font-bold">AI 已自動提取數據，請核對。</p>
+                        <p class="text-sm font-black text-blue-700">影像已附加</p>
+                        <p class="text-[10px] text-blue-400 font-bold">此照片將與紀錄一同儲存。</p>
                     </div>
                     <button id="clear-image" class="p-2 text-blue-300 hover:text-blue-600">
                         <i data-lucide="x"></i>
@@ -102,7 +93,6 @@
             </section>
         </div>
 
-        <!-- 右側：歷史清單 -->
         <div class="lg:col-span-7 flex flex-col gap-6">
             <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 flex flex-col h-[85vh]">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -127,14 +117,12 @@
                 </div>
 
                 <div id="records-list" class="space-y-3 flex-1 overflow-y-auto pr-2 custom-scroll pb-4">
-                    <!-- 紀錄會動態生成於此 -->
                     <div class="text-center py-24 text-slate-300">目前尚無本地紀錄</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 圖片彈窗 -->
     <div id="modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-md">
         <div class="relative bg-white p-2 rounded-[2.5rem] max-w-xl w-full shadow-2xl">
             <button id="close-modal" class="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full hover:bg-black">
@@ -144,10 +132,9 @@
         </div>
     </div>
 
-    <script type="module">
+    <script>
         // --- 設定 ---
-        const apiKey = ""; // Gemini API Key
-        const STORAGE_KEY = 'local_health_records';
+        const STORAGE_KEY = 'local_health_records_simple';
 
         // --- 資料狀態 ---
         let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -164,7 +151,6 @@
             const list = document.getElementById('records-list');
             const searchTerm = document.getElementById('search-input').value.toLowerCase();
             
-            // 過濾資料
             const filtered = records
                 .filter(r => r.employeeId.toLowerCase().includes(searchTerm))
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -187,7 +173,7 @@
                             <div class="min-w-0">
                                 <div class="flex items-center gap-2">
                                     <span class="font-black text-slate-700 truncate">工號: ${r.employeeId}</span>
-                                    ${r.image ? `<button onclick="viewImage('${r.image}')" class="text-blue-500 hover:underline text-[10px] font-bold shrink-0">影像證明</button>` : ''}
+                                    ${r.image ? `<button onclick="viewImage('${r.image}')" class="text-blue-500 hover:underline text-[10px] font-bold shrink-0">查看照片</button>` : ''}
                                 </div>
                                 <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                                     <span class="text-sm font-bold text-slate-500">${r.systolic}/${r.diastolic} <small class="font-normal opacity-60">mmHg</small></span>
@@ -211,47 +197,17 @@
             return { label: '正常', color: 'text-emerald-600', bg: 'bg-emerald-50' };
         }
 
-        // --- AI 辨識 ---
+        // --- 處理照片上傳 (不辨識，僅儲存) ---
         document.getElementById('camera-input').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            showStatus('正在處理影像...', true);
-            const storageImg = await resizeImage(file, 400, 0.5);
-            const aiImg = await resizeImage(file, 1024, 0.8);
-            
+            // 壓縮圖片以便儲存在 LocalStorage (限制寬度 400px)
+            const storageImg = await resizeImage(file, 400, 0.6);
             capturedImageBase64 = storageImg;
             document.getElementById('image-preview').src = storageImg;
             document.getElementById('preview-container').classList.remove('hidden');
-
-            showStatus('AI 智能辨識中...', true);
-            try {
-                const result = await callGemini(aiImg.split(',')[1]);
-                if (result) {
-                    document.getElementById('systolic').value = result.systolic || '';
-                    document.getElementById('diastolic').value = result.diastolic || '';
-                    document.getElementById('pulse').value = result.pulse || '';
-                }
-                showStatus('', false);
-            } catch (err) {
-                alert('AI 辨識失敗，請手動輸入數值。');
-                showStatus('', false);
-            }
         });
-
-        async function callGemini(base64) {
-            const prompt = "Analyze this blood pressure monitor photo. Extract: systolic, diastolic, and pulse rate. Return ONLY valid JSON: {\"systolic\": number, \"diastolic\": number, \"pulse\": number}.";
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }],
-                    generationConfig: { responseMimeType: "application/json" }
-                })
-            });
-            const data = await response.json();
-            return JSON.parse(data.candidates[0].content.parts[0].text);
-        }
 
         // --- 儲存與管理 ---
         document.getElementById('health-form').addEventListener('submit', (e) => {
@@ -270,7 +226,7 @@
             records.push(newRecord);
             saveToLocal();
             
-            // 重置表單
+            // 重置
             document.getElementById('health-form').reset();
             document.getElementById('preview-container').classList.add('hidden');
             capturedImageBase64 = null;
@@ -290,21 +246,19 @@
         };
 
         document.getElementById('clear-all-btn').onclick = () => {
-            if (confirm('確定要清空「這台裝置」上的所有歷史紀錄嗎？（不可還原）')) {
+            if (confirm('確定要清空所有歷史紀錄嗎？')) {
                 records = [];
                 saveToLocal();
                 renderRecords();
             }
         };
 
-        // --- Excel 匯出功能 ---
+        // --- Excel 匯出 ---
         document.getElementById('export-btn').onclick = () => {
             if (records.length === 0) {
-                alert('目前尚無資料可供匯出。');
+                alert('目前尚無資料。');
                 return;
             }
-
-            // 準備 Excel 資料格式
             const dataForExcel = records.map(r => ({
                 '量測時間': new Date(r.timestamp).toLocaleString('zh-TW'),
                 '員工工號': r.employeeId,
@@ -313,34 +267,24 @@
                 '脈搏(BPM)': r.pulse,
                 '判定結果': analyzeHealth(r.systolic, r.diastolic).label
             }));
-
             const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "健康紀錄");
-
-            // 匯出檔案
-            const fileName = `血壓紀錄匯出_${new Date().toISOString().slice(0,10)}.xlsx`;
-            XLSX.writeFile(workbook, fileName);
+            XLSX.writeFile(workbook, `血壓紀錄_${new Date().toISOString().slice(0,10)}.xlsx`);
         };
 
-        // --- 其他 UI 功能 ---
+        // --- UI Helper ---
         window.viewImage = (src) => {
             document.getElementById('modal-image').src = src;
             document.getElementById('modal').classList.remove('hidden');
         };
-
         document.getElementById('close-modal').onclick = () => document.getElementById('modal').classList.add('hidden');
         document.getElementById('clear-image').onclick = () => {
             capturedImageBase64 = null;
             document.getElementById('preview-container').classList.add('hidden');
+            document.getElementById('camera-input').value = "";
         };
         document.getElementById('search-input').oninput = renderRecords;
-
-        function showStatus(text, show) {
-            const status = document.getElementById('scan-status');
-            document.getElementById('status-text').innerText = text;
-            status.classList.toggle('hidden', !show);
-        }
 
         function resizeImage(file, maxWidth, quality) {
             return new Promise((resolve) => {
